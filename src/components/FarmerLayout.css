@@ -1,0 +1,90 @@
+.layout-root { display: flex; flex-direction: column; min-height: 100vh; }
+
+.mobile-header {
+    background-color: var(--surface);
+    border-bottom: 1px solid var(--outline-variant);
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 var(--space-margin-mobile);
+    height: var(--space-touch-target);
+    position: sticky; top: 0; z-index: 40;
+}
+
+.brand { font-size: 20px; font-weight: 600; color: var(--primary); letter-spacing: -0.01em; }
+.icon-btn {
+    background: none; border: none; color: var(--on-surface-variant);
+    width: var(--space-touch-target); height: var(--space-touch-target);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border-radius: var(--radius-full);
+}
+
+.desktop-sidebar {
+    display: none; width: 320px;
+    background-color: var(--surface-container-lowest);
+    border-right: 1px solid var(--outline-variant);
+    flex-direction: column; height: 100vh;
+    position: sticky; top: 0; padding: var(--space-stack-md) 0;
+}
+
+.sidebar-header { padding: 0 var(--space-margin-desktop); margin-bottom: var(--space-stack-md); }
+.profile-badge { display: flex; align-items: center; gap: 12px; margin-top: 24px; }
+.avatar {
+    width: var(--space-touch-target); height: var(--space-touch-target);
+    background-color: var(--primary-container); color: var(--on-primary-container);
+    border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 20px;
+}
+.profile-name { font-weight: 600; font-size: 14px; }
+.profile-id { font-size: 12px; color: var(--on-surface-variant); }
+
+.sidebar-nav { display: flex; flex-direction: column; padding: 0 var(--space-base); gap: 4px; }
+.nav-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: var(--space-stack-sm) var(--space-margin-mobile);
+    color: var(--on-surface-variant); text-decoration: none;
+    font-weight: 500; font-size: 14px;
+    border-radius: var(--radius-md); border: none; background: none;
+    cursor: pointer; width: 100%;
+}
+.nav-item.active { background-color: var(--secondary-container); color: var(--on-secondary-container); }
+.nav-item:hover:not(.active) { background-color: var(--surface-container-low); }
+.nav-item.logout { margin-top: auto; color: var(--error); }
+
+.main-canvas { flex: 1; display: flex; flex-direction: column; padding-bottom: 64px; }
+
+.sync-banner {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: var(--space-base); font-size: 12px; font-weight: 500;
+    position: sticky; top: var(--space-touch-target); z-index: 30;
+}
+.sync-banner.offline { background-color: var(--surface-variant); color: var(--on-surface-variant); }
+.sync-banner.syncing { background-color: var(--primary-container); color: var(--on-primary-container); }
+
+.pulse-dot {
+    width: 8px; height: 8px; border-radius: var(--radius-full);
+    background-color: currentColor; animation: pulse 1.5s infinite;
+}
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
+.content-pad { padding: var(--space-margin-mobile); max-width: 672px; width: 100%; margin: 0 auto; }
+
+.mobile-bottom-nav {
+    position: fixed; bottom: 0; width: 100%;
+    background-color: var(--surface-container-lowest);
+    border-top: 1px solid var(--outline-variant);
+    display: flex; height: 64px;
+    padding-bottom: env(safe-area-inset-bottom); z-index: 40;
+}
+.bottom-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: var(--on-surface-variant); text-decoration: none; font-size: 12px; font-weight: 500; gap: 2px;
+}
+.bottom-item.active { color: var(--primary); }
+
+@media (min-width: 768px) {
+    .layout-root { flex-direction: row; }
+    .mobile-header, .mobile-bottom-nav { display: none; }
+    .desktop-sidebar { display: flex; }
+    .sync-banner { top: 0; }
+    .main-canvas { padding-bottom: 0; }
+    .content-pad { padding: var(--space-stack-md) var(--space-margin-desktop); }
+}
