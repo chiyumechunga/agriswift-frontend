@@ -7,8 +7,11 @@ const read  = () => { try { return JSON.parse(sessionStorage.getItem(KEY)); } ca
 const write = (s) => sessionStorage.setItem(KEY, JSON.stringify(s));
 
 const ROLE_MAP = {
-  FARMER: 'farmer', ADMIN: 'admin', DEPOT_OFFICER: 'officer',
-  FRA_OFFICER: 'fra_officer', MINISTRY: 'ministry', FINANCE: 'finance',
+  FARMER: 'farmer',
+  ADMIN: 'admin',
+  FRA_OFFICER: 'fra_officer',
+  MINISTRY_OFFICER: 'ministry_officer',
+  AUDITOR: 'auditor',
 };
 
 /** Backend UserPrincipal → app user with a single lowercase `role`. */

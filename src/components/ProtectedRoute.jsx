@@ -2,44 +2,36 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+const HOME = {
+  farmer: '/farmer',
+  officer: '/fra', fra_officer: '/officer', admin: '/officer',
+  ministry: '/ministry', finance: '/ministry',
+};
+
+export const normalizeRole = (r) => String(r ?? '').toLowerCase().replace(/^role_/, '');
+export const homeFor = (r) => HOME[normalizeRole(r)] ?? null;
+
 export function ProtectedRoute({ allowedRoles }) {
-    const { user, loading } = useAuth();
-    const location = useLocation();
+  const { user } = useAuth();
+  const location = useLocation();
 
-    if (loading) {
-        return (
-            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <p style={{ fontWeight: '600', color: 'var(--agri-primary)' }}>Validating secure session credentials...</p>
-            </div>
-        );
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+
+  const role = normalizeRole(user.role);
+  if (allowedRoles && !allowedRoles.includes(role)) {
+    const home = HOME[role];
+    if (!home || location.pathname.startsWith(home)) {
+      return <div role="alert" style={{ padding: 32 }}>403: your role cannot access this area.</div>;
     }
-
-    if (!user) {
-        return <Navigate to="/login" state={{ from: location }} replace />;
-    }
-
-    const hasPermission = allowedRoles ? allowedRoles.includes(user.role) : true;
-
-    if (!hasPermission) {
-        // Redirect user to their default role dashboard if they lack permission for this route
-        const fallbackPath = user.role === 'farmer' ? '/farmer' : user.role === 'officer' ? '/officer' : '/ministry';
-        return <Navigate to={fallbackPath} replace />;
-    }
-
-    return <Outlet />;
+    return <Navigate to={home} replace />;
+  }
+  return <Outlet />;
 }
 
 export function PublicOnlyRoute({ children }) {
-    const { user, loading } = useAuth();
-
-    if (loading) return null;
-
-    if (user) {
-        const dest = user.role === 'farmer' ? '/farmer' : user.role === 'officer' ? '/officer' : '/ministry';
-        return <Navigate to={dest} replace />;
-    }
-
-    return children;
+  const { user } = useAuth();
+  const home = user && homeFor(user.role);
+  return home ? <Navigate to={home} replace /> : children;
 }
 
 export default ProtectedRoute;

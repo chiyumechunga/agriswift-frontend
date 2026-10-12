@@ -1,14 +1,24 @@
 // src/pages/Login.jsx
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './auth.css';
 
-// Where each role lands after login (matches the routes in App.jsx)
-const homeFor = (role) =>
-    role === 'farmer' ? '/farmer'
-    : role === 'ministry' || role === 'finance' ? '/ministry'
-    : '/officer';
+// Where each role lands after login (must match the routes and allowedRoles in App.jsx)
+const homeFor = (role) => {
+    switch (role) {
+        case 'farmer':           return '/farmer';
+        case 'ministry_officer': return '/ministry';
+        case 'auditor':          return '/ministry';
+        case 'fra_officer':      return '/officer';
+        case 'admin':            return '/officer';
+        default:                 return '/';
+    }
+};
+
+// Farmer identifiers are an NRC (999999/61/1) or a mobile number (0978602368, +260978602368):
+// digits, slashes, spaces, dashes and an optional leading +. Anything with letters is a staff username.
+const looksLikeFarmer = (id) => /^[\d/+\s-]+$/.test(id.trim());
 
 export default function Login() {
     const { login } = useAuth();
@@ -20,37 +30,43 @@ export default function Login() {
 
     const [step, setStep] = useState(1);
     const [identifier, setIdentifier] = useState('');
-    const [role, setRole] = useState('farmer');
     const [authMode, setAuthMode] = useState('secret'); // 'secret' = PIN/password | 'otp' = optional
     const [secret, setSecret] = useState('');
     const [showSecret, setShowSecret] = useState(false);
     const [otpCode, setOtpCode] = useState('');
-    const [token, setToken] = useState('');
-    const [showToken, setShowToken] = useState(false);
-    const [depot, setDepot] = useState('Monze Central Silos (Southern)');
 
-    // Dynamic role detection
-    useEffect(() => {
-        if (identifier.toUpperCase().startsWith('FRA-') || identifier.includes('@')) setRole('officer');
-        else if (identifier.length > 0) setRole('farmer');
-    }, [identifier]);
+    // Derived from what was typed, so it can never get out of sync with the input.
+    const isFarmer = identifier.trim() === '' || looksLikeFarmer(identifier);
+    const accountType = isFarmer ? 'farmer' : 'staff';
 
     const handleNext = async () => {
         if (step === 1) { setStep(2); return; }
         if (authMode === 'otp') { setError('SMS OTP is not enabled on this deployment yet.'); return; }
+        if (secret === '') { setError(isFarmer ? 'Enter your PIN.' : 'Enter your password.'); return; }
 
         setBusy(true);
         setError('');
         try {
-            const payload = role === 'farmer'
-                ? { identifier: identifier.trim(), pin: secret }        // LoginRequest: identifier + pin
-                : { username: identifier.trim(), password: token };     // LoginRequest: username + password
-            const user = await login(payload, role === 'farmer' ? 'farmer' : 'staff');
-            navigate(location.state?.from?.pathname ?? homeFor(user.role), { replace: true });
+            const payload = isFarmer
+                ? { identifier: identifier.trim(), pin: secret }        // POST /api/v1/auth/farmer/login
+                : { username: identifier.trim(), password: secret };    // POST /api/v1/auth/login
+            const user = await login(payload, accountType);
+
+            // Only honour the page the user was sent from if their role is allowed there.
+            const home = homeFor(user.role);
+            const from = location.state?.from?.pathname;
+            const target = from && from.startsWith(home) ? from : home;
+            navigate(target, { replace: true });
         } catch (e) {
-            setError(e.response?.status === 401
-                ? 'Incorrect identifier or passcode.'
-                : 'Cannot reach AgriSwift right now.');
+            console.error('Login failed:', e.response?.status, e.response?.data ?? e);
+            const status = e.response?.status;
+            setError(
+                status === 401 ? 'Incorrect identifier or passcode.'
+                : status === 403 ? 'This account is locked or not allowed to sign in.'
+                : status === 400 ? 'The sign-in request was rejected. Check the details and try again.'
+                : e.response ? `Sign-in failed (error ${status}).`
+                : 'Cannot reach AgriSwift right now.'
+            );
         } finally {
             setBusy(false);
         }
@@ -61,7 +77,7 @@ export default function Login() {
             <main className="auth-stage">
                 <section className="auth-card">
                     {step === 2 && (
-                        <button className="auth-back" onClick={() => setStep(1)} aria-label="Back">
+                        <button className="auth-back" onClick={() => { setStep(1); setError(''); }} aria-label="Back">
                             <span className="material-symbols-outlined">arrow_back</span>
                         </button>
                     )}
@@ -81,16 +97,16 @@ export default function Login() {
                             <h1 className="auth-headline">{step === 1 ? 'Sign in' : "Verify it's you"}</h1>
                             <p className="auth-sub">
                                 {step === 1
-                                    ? (role === 'farmer'
+                                    ? (isFarmer
                                         ? 'Use your farmer NRC or mobile money number.'
-                                        : 'Use your FRA depot badge credentials.')
-                                    : (role === 'farmer'
-                                        ? `Enter the passcode linked to ${identifier || 'your account'}.`
-                                        : 'Authorize this depot terminal to continue.')}
+                                        : 'Use your AgriSwift staff username.')
+                                    : (isFarmer
+                                        ? `Enter the PIN linked to ${identifier || 'your account'}.`
+                                        : `Enter the password for ${identifier}.`)}
                             </p>
-                            <span className={`auth-rolechip ${role === 'officer' ? 'auth-rolechip--officer' : ''}`}>
+                            <span className={`auth-rolechip ${!isFarmer ? 'auth-rolechip--officer' : ''}`}>
                                 <span className="auth-livedot"></span>
-                                {role === 'farmer' ? 'Farmer access' : 'Depot officer'} ·
+                                {isFarmer ? 'Farmer access' : 'Staff access'}
                             </span>
                         </div>
 
@@ -100,9 +116,10 @@ export default function Login() {
                                 <>
                                     <div className="auth-field">
                                         <input id="identifier" type="text" placeholder=" "
+                                               autoComplete="username"
                                                value={identifier} onChange={(e) => setIdentifier(e.target.value)}
                                                onKeyDown={(e) => { if (e.key === 'Enter' && identifier.trim() !== '') handleNext(); }} />
-                                        <label htmlFor="identifier">NRC, phone, or badge ID</label>
+                                        <label htmlFor="identifier">NRC, phone, or staff username</label>
                                     </div>
                                     <p className="auth-note">
                                         Sharing a depot tablet? Sign in inside a private window so your passcode stays yours.{' '}
@@ -111,8 +128,8 @@ export default function Login() {
                                 </>
                             )}
 
-                            {/* Farmer: ONE secret field, OTP optional */}
-                            {step === 2 && role === 'farmer' && authMode === 'secret' && (
+                            {/* Farmer + staff share ONE secret field (PIN for farmers, password for staff) */}
+                            {step === 2 && authMode === 'secret' && (
                                 <>
                                     <div className="auth-field">
                                         <div className="auth-cap">
@@ -121,25 +138,28 @@ export default function Login() {
                                                 className={`auth-secret ${showSecret ? 'is-shown' : ''}`}
                                                 type={showSecret ? 'text' : 'password'}
                                                 placeholder=" "
+                                                autoComplete="current-password"
                                                 value={secret}
                                                 onChange={(e) => setSecret(e.target.value)}
                                                 onKeyDown={(e) => { if (e.key === 'Enter' && !busy) handleNext(); }}
                                             />
-                                            <label htmlFor="secret">PIN or password</label>
+                                            <label htmlFor="secret">{isFarmer ? 'PIN' : 'Password'}</label>
                                             <button type="button" className="auth-eye" onClick={() => setShowSecret(v => !v)} aria-label="Toggle visibility">
                                                 <span className="material-symbols-outlined">{showSecret ? 'visibility_off' : 'visibility'}</span>
                                             </button>
                                         </div>
                                     </div>
-                                    <button type="button" className="auth-helplink" onClick={() => setAuthMode('otp')}>
-                                        Use SMS OTP instead (optional)
-                                    </button>
+                                    {isFarmer && (
+                                        <button type="button" className="auth-helplink" onClick={() => setAuthMode('otp')}>
+                                            Use SMS OTP instead (optional)
+                                        </button>
+                                    )}
                                     <button type="button" className="auth-helplink">Forgot passcode?</button>
                                 </>
                             )}
 
-                            {/* Optional OTP mode */}
-                            {step === 2 && role === 'farmer' && authMode === 'otp' && (
+                            {/* Optional OTP mode (farmers only) */}
+                            {step === 2 && isFarmer && authMode === 'otp' && (
                                 <>
                                     <button type="button" className="auth-textbtn" style={{ alignSelf: 'flex-start' }}>
                                         <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>sms</span>
@@ -154,41 +174,8 @@ export default function Login() {
                                         </div>
                                     </div>
                                     <button type="button" className="auth-helplink" onClick={() => setAuthMode('secret')}>
-                                        Use PIN / password instead
+                                        Use PIN instead
                                     </button>
-                                </>
-                            )}
-
-                            {/* Officer: depot + single token field */}
-                            {step === 2 && role === 'officer' && (
-                                <>
-                                    <div className="auth-field auth-field--float">
-                                        <select id="depot" value={depot} onChange={(e) => setDepot(e.target.value)}>
-                                            <option>Monze Central Silos (Southern)</option>
-                                            <option>Chipata Main Holding Depot (Eastern)</option>
-                                            <option>Kasama District Storage (Northern)</option>
-                                            <option>Mpongwe Agro Logistics Hub (Copperbelt)</option>
-                                            <option>Lusaka National Strategic Reserve</option>
-                                        </select>
-                                        <label htmlFor="depot">Assigned depot</label>
-                                    </div>
-                                    <div className="auth-field">
-                                        <div className="auth-cap">
-                                            <input
-                                                id="token"
-                                                className={`auth-secret ${showToken ? 'is-shown' : ''}`}
-                                                type={showToken ? 'text' : 'password'}
-                                                placeholder=" "
-                                                value={token}
-                                                onChange={(e) => setToken(e.target.value)}
-                                                onKeyDown={(e) => { if (e.key === 'Enter' && !busy) handleNext(); }}
-                                            />
-                                            <label htmlFor="token">Master security token</label>
-                                            <button type="button" className="auth-eye" onClick={() => setShowToken(v => !v)} aria-label="Toggle visibility">
-                                                <span className="material-symbols-outlined">{showToken ? 'visibility_off' : 'visibility'}</span>
-                                            </button>
-                                        </div>
-                                    </div>
                                 </>
                             )}
 
@@ -197,7 +184,7 @@ export default function Login() {
                             )}
 
                             <div className="auth-actions">
-                                {step === 2 && role === 'farmer' && (
+                                {step === 2 && isFarmer && (
                                     <button type="button" className="auth-textbtn auth-push">
                                         <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>fingerprint</span>
                                         Use biometric
