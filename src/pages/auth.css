@@ -1,0 +1,175 @@
+/* src/pages/auth.css — Google-style auth shell, AgriSwift FRA theme */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+
+:root {
+    --ag-bg: #f9f9f9;
+    --ag-card: #ffffff;
+    --ag-border: #e0e0e0;
+    --ag-text: #1a1c1c;
+    --ag-text-var: #41493e;
+    --ag-primary: #00450d;          /* FRA Green */
+    --ag-primary-hover: #0c5216;
+    --ag-on-primary: #ffffff;
+    --ag-secondary: #8c4f10;        /* Copper Gold */
+    --ag-outline: #717a6d;
+    --ag-r-input: 0.25rem;          /* 4px fields & text buttons */
+    --ag-r-card: 0.75rem;
+    --ag-r-pill: 9999px;
+}
+
+.auth-shell, .auth-shell *, .auth-shell *::before, .auth-shell *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.auth-shell {
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    background: var(--ag-bg); color: var(--ag-text);
+    font-family: 'Inter', system-ui, sans-serif;
+    padding: 24px 16px 8px;
+    -webkit-font-smoothing: antialiased;
+}
+.auth-shell ::selection { background: #91d78a; }
+.auth-shell .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+
+/* ---------- Stage & card ---------- */
+.auth-stage { flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; }
+.auth-card {
+    position: relative;
+    width: 100%; max-width: 880px;
+    background: var(--ag-card);
+    border: 1px solid var(--ag-border);
+    border-radius: var(--ag-r-card);
+    padding: 48px 56px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.auth-back {
+    position: absolute; top: 16px; left: 16px;
+    width: 40px; height: 40px; border-radius: 50%;
+    border: none; background: transparent; color: var(--ag-text-var);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.auth-back:hover { background: rgba(26, 28, 28, 0.06); }
+.auth-grid { display: grid; grid-template-columns: 5fr 6fr; gap: 56px; align-items: start; }
+@media (max-width: 720px) {
+    .auth-card { padding: 40px 20px 28px; }
+    .auth-grid { grid-template-columns: 1fr; gap: 32px; }
+}
+
+/* ---------- Left intro column ---------- */
+.auth-brandrow { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+.auth-logo {
+    width: 40px; height: 40px; border-radius: 0.5rem;
+    background: var(--ag-primary); color: var(--ag-on-primary);
+    display: flex; align-items: center; justify-content: center;
+}
+.auth-wordmark { display: flex; align-items: center; gap: 6px; font-size: 20px; line-height: 28px; font-weight: 700; color: var(--ag-primary); }
+.auth-fra-pill {
+    display: inline-flex; align-items: center; gap: 2px;
+    padding: 2px 6px; border-radius: var(--ag-r-pill);
+    background: #1b5e20; color: #90d689;
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.auth-stepflag { font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ag-secondary); margin-bottom: 8px; }
+.auth-headline { font-size: 32px; line-height: 40px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 12px; }
+.auth-sub { font-size: 16px; line-height: 24px; color: var(--ag-text-var); margin-bottom: 20px; }
+.auth-rolechip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: var(--ag-r-pill);
+    background: rgba(42, 107, 44, 0.12); color: var(--ag-primary);
+    font-size: 12px; line-height: 16px; font-weight: 600;
+}
+.auth-rolechip--officer { background: rgba(140, 79, 16, 0.12); color: var(--ag-secondary); }
+.auth-livedot { width: 6px; height: 6px; border-radius: 50%; background: #2a6b2c; animation: auth-pulse 2s infinite; }
+@keyframes auth-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* ---------- Right form column ---------- */
+.auth-form { display: flex; flex-direction: column; gap: 20px; }
+
+/* Floating-label outlined field */
+.auth-field { position: relative; }
+.auth-field input, .auth-field select {
+    width: 100%; height: 56px; padding: 0 16px;
+    border: 1.5px solid var(--ag-outline); border-radius: var(--ag-r-input);
+    background: transparent; color: var(--ag-text);
+    font: 400 16px/24px 'Inter', sans-serif;
+    outline: none; transition: border-color 0.15s;
+}
+.auth-field input:hover, .auth-field select:hover { border-color: var(--ag-text); }
+.auth-field input:focus, .auth-field select:focus { border-color: var(--ag-primary); box-shadow: inset 0 0 0 1px var(--ag-primary); }
+.auth-field label {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    padding: 0 4px; border-radius: 2px;
+    font: 400 16px/24px 'Inter', sans-serif; color: var(--ag-text-var);
+    pointer-events: none; transition: top 0.15s, font-size 0.15s, color 0.15s;
+}
+.auth-field input:focus + label,
+.auth-field input:not(:placeholder-shown) + label,
+.auth-field--float label { top: 0; font-size: 12px; line-height: 16px; font-weight: 500; background: var(--ag-card); }
+.auth-field input:focus + label, .auth-field select:focus + label { color: var(--ag-primary); }
+
+/* ---------- Single secret field (PIN / password / token) ---------- */
+/* Caps the field so it can never span the card or screen;
+   the eye button sits against the capped input, not the column edge */
+.auth-cap { position: relative; max-width: 320px; }
+.auth-cap--code { max-width: 220px; }
+.auth-secret { letter-spacing: 0.35em; padding-right: 48px; }
+.auth-secret.is-shown { letter-spacing: 0.05em; }
+.auth-code { letter-spacing: 0.5em; }
+.auth-eye {
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    width: 40px; height: 40px; border-radius: 50%;
+    border: none; background: transparent; color: var(--ag-text-var);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.auth-eye:hover { background: rgba(26, 28, 28, 0.06); }
+
+/* ---------- Links, notes, actions ---------- */
+.auth-helplink {
+    align-self: flex-start; padding: 0; border: none; background: none; cursor: pointer;
+    color: var(--ag-primary); font: 600 14px/20px 'Inter', sans-serif;
+    display: inline-flex; align-items: center; gap: 6px;
+}
+.auth-helplink:hover { text-decoration: underline; }
+.auth-note { font-size: 14px; line-height: 20px; color: var(--ag-text-var); }
+.auth-note span { color: var(--ag-primary); font-weight: 600; cursor: pointer; }
+.auth-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 8px; }
+.auth-push { margin-right: auto; }
+.auth-textbtn {
+    height: 40px; padding: 0 12px; border-radius: var(--ag-r-input);
+    border: none; background: transparent; cursor: pointer;
+    color: var(--ag-primary); font: 600 14px/20px 'Inter', sans-serif;
+    display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+}
+.auth-textbtn:hover { background: rgba(0, 69, 13, 0.08); }
+.auth-next {
+    height: 40px; padding: 0 28px; border-radius: var(--ag-r-pill);
+    border: none; cursor: pointer;
+    background: var(--ag-primary); color: var(--ag-on-primary);
+    font: 600 14px/20px 'Inter', sans-serif;
+}
+.auth-next:hover:not(:disabled) { background: var(--ag-primary-hover); }
+.auth-next:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ---------- Review rows (signup step 4) ---------- */
+.auth-review { display: flex; flex-direction: column; gap: 12px; }
+.auth-review-row {
+    display: flex; justify-content: space-between; gap: 16px;
+    font-size: 14px; line-height: 20px; color: var(--ag-text-var);
+    border-bottom: 1px solid var(--ag-border); padding-bottom: 12px;
+}
+.auth-review-row strong { color: var(--ag-text); font-weight: 600; }
+
+/* ---------- Utility footer ---------- */
+.auth-footer {
+    width: 100%; max-width: 960px;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+    padding: 16px 8px 8px;
+    color: var(--ag-text-var); font-size: 12px; line-height: 16px; font-weight: 500;
+}
+.auth-lang {
+    height: 32px; padding: 0 8px; border-radius: var(--ag-r-input);
+    border: none; background: transparent; color: inherit; font: inherit; cursor: pointer;
+}
+.auth-lang:hover { background: rgba(26, 28, 28, 0.06); }
+.auth-footer-links { display: flex; gap: 28px; }
+.auth-footer-links a { color: inherit; text-decoration: none; }
+.auth-footer-links a:hover { color: var(--ag-text); }

@@ -1,59 +1,32 @@
-import { Outlet, NavLink } from 'react-router-dom';
+// src/components/FarmerLayout.jsx
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { SyncStatus } from './SyncStatus';
-import './FarmerLayout.css';
 
 export default function FarmerLayout() {
     const { user, logout } = useAuth();
+    const navigate = useNavigate();
+
+    const handleLogout = async () => {
+        await logout('farmer');
+        navigate('/login', { replace: true });
+    };
 
     return (
-        <div className="layout-root">
-            <header className="mobile-header">
-                <button className="icon-btn"><span className="material-symbols-outlined">agriculture</span></button>
-                <h1 className="brand">AgriSwift</h1>
-                <button className="icon-btn" onClick={logout}><span className="material-symbols-outlined">logout</span></button>
-            </header>
-
-            <aside className="desktop-sidebar">
-                <div className="sidebar-header">
-                    <h1 className="brand">AgriSwift</h1>
-                    <div className="profile-badge">
-                        <div className="avatar">{user?.name?.charAt(0) || 'F'}</div>
-                        <div>
-                            <p className="profile-name">{user?.name}</p>
-                            <p className="profile-id">ID: {user?.id}</p>
-                        </div>
-                    </div>
-                </div>
-                <nav className="sidebar-nav">
-                    <NavLink to="/farmer" end className="nav-item"><span className="material-symbols-outlined">dashboard</span> Dashboard</NavLink>
-                    <NavLink to="/farmer/records" className="nav-item"><span className="material-symbols-outlined">badge</span> Records</NavLink>
-                    <NavLink to="/farmer/intake" className="nav-item"><span className="material-symbols-outlined">input</span> Intake</NavLink>
-                    <button className="nav-item logout" onClick={logout}><span className="material-symbols-outlined">logout</span> Logout</button>
+        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#f9f9f9', fontFamily: 'Inter, sans-serif' }}>
+            <header style={{ height: 64, padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', borderBottom: '1px solid #e0e0e0' }}>
+                <strong style={{ color: '#00450d' }}>AgriSwift — Farmer Portal</strong>
+                <nav style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 14, fontWeight: 600 }}>
+                    <NavLink to="/farmer" end style={{ color: '#00450d' }}>Dashboard</NavLink>
+                    <NavLink to="/farmer/records" style={{ color: '#41493e' }}>Records</NavLink>
+                    <NavLink to="/farmer/intake" style={{ color: '#41493e' }}>Intake</NavLink>
+                    <button onClick={handleLogout} style={{ height: 40, padding: '0 16px', borderRadius: 4, border: '1.5px solid #717a6d', background: '#fff', color: '#00450d', fontWeight: 600, cursor: 'pointer' }}>
+                        Log Out
+                    </button>
                 </nav>
-            </aside>
-
-            <main className="main-canvas">
-                <SyncStatus />
-                <div className="content-pad">
-                    <Outlet />
-                </div>
+            </header>
+            <main style={{ flex: 1, padding: 24 }}>
+                <Outlet /> {/* ← child routes render here */}
             </main>
-
-            <nav className="mobile-bottom-nav">
-                <NavLink to="/farmer/intake" className="bottom-item">
-                    <span className="material-symbols-outlined">input</span>
-                    <span>Intake</span>
-                </NavLink>
-                <NavLink to="/farmer" end className="bottom-item">
-                    <span className="material-symbols-outlined">home</span>
-                    <span>Home</span>
-                </NavLink>
-                <NavLink to="/farmer/records" className="bottom-item">
-                    <span className="material-symbols-outlined">badge</span>
-                    <span>Records</span>
-                </NavLink>
-            </nav>
         </div>
     );
 }

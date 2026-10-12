@@ -1,26 +1,122 @@
-import { Routes, Route } from 'react-router-dom';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import LandingPage from './pages/LandingPage';
-import FarmerLayout from './components/FarmerLayout';
-import Dashboard from './pages/Farmer/Dashboard';
+// src/App.jsx
+import { useEffect } from 'react';
+import { Routes, Route, Link, useLocation, Navigate, Outlet } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute.jsx';
+
+// Layouts
+import FarmerLayout from './components/FarmerLayout.jsx';
+
+// Public Pages
+import LandingPage from './pages/LandingPage.jsx';
+import Login from './pages/Login.jsx';
+import Signup from './pages/Signup.jsx';
+
+// Farmer Pages (Matching your exact src/pages/Farmer/ tree)
+import FarmerDashboard from './pages/Farmer/FarmerDashboard.jsx';
 import Records from './pages/Farmer/Records.jsx';
-import Intake from './pages/Farmer/Intake';
+import ReceiptPage from './pages/Farmer/ReceiptPage.jsx';
+
+// FRA Depot Officer Pages
+import FRADashboard from './pages/FRA/FRADashboard.jsx';
+
+// Ministerial & Finance Pages
+import MinisterialDashboard from './pages/Ministerial/MinisterialDashboard.jsx';
+
+function ScrollToTop() {
+    const { pathname } = useLocation();
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, [pathname]);
+    return null;
+}
+
+function ExecutiveShell({ portalTitle, badgeText, badgeColor }) {
+    const { user, logout } = useAuth();
+
+    return (
+        <div className="agri-landing" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+            <header className="agri-header">
+                <div className="agri-container agri-nav">
+                    <Link to="/" className="agri-brand">
+                        <span className="material-symbols-outlined" style={{ fontSize: '32px' }}>agriculture</span>
+                        <span>AgriSwift</span>
+                        <span className="agri-pill-badge" style={{ backgroundColor: badgeColor, color: '#ffffff', marginLeft: '8px' }}>
+                            {badgeText}
+                        </span>
+                    </Link>
+
+                    <div className="agri-nav-actions">
+                        <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--agri-text-muted)' }}>
+                            {user?.name || user?.badgeId || user?.nrc || 'Authorized User'}
+                        </span>
+                        <button onClick={logout} className="agri-btn agri-btn-outline" style={{ padding: '6px 14px', fontSize: '13px' }}>
+                            Sign Out
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <main className="agri-container" style={{ padding: '32px 24px', flex: 1 }}>
+                <Outlet />
+            </main>
+
+            <footer className="agri-footer">
+                <div className="agri-container agri-footer-inner">
+                    <div>AgriSwift Platform · Food Reserve Agency &amp; Ministry of Agriculture</div>
+                    <div>Active Role: <strong>{user?.role || 'Stakeholder'}</strong></div>
+                </div>
+            </footer>
+        </div>
+    );
+}
+
+function NotFound() {
+    return (
+        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+            <h1 style={{ fontSize: '36px', color: 'var(--agri-primary)' }}>404 — Page Not Found</h1>
+            <p style={{ color: 'var(--agri-text-muted)' }}>The requested path does not exist in AgriSwift.</p>
+            <Link to="/" className="agri-btn agri-btn-primary">Return to Home</Link>
+        </div>
+    );
+}
 
 export default function App() {
-  return (
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
+    return (
+        <>
+            <ScrollToTop />
+            <Routes>
+                {/* Public */}
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
 
-        {/* Farmer Module */}
-        <Route element={<ProtectedRoute allowedRoles={['farmer']} />}>
-          <Route path="/farmer" element={<FarmerLayout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="records" element={<Records />} />
-            <Route path="intake" element={<Intake />} />
-          </Route>
-        </Route>
+                {/* Farmer Module */}
+                <Route element={<ProtectedRoute allowedRoles={['farmer']} />}>
+                    <Route path="/farmer" element={<FarmerLayout />}>
+                        <Route index element={<FarmerDashboard />} />
+                        <Route path="records" element={<Records />} />
+                        <Route path="receipt/:id" element={<ReceiptPage />} />
+                    </Route>
+                </Route>
 
-        {/* Additional modules (Depot Officer, etc.) will go here */}
-      </Routes>
-  );
+                {/* FRA Officer Module */}
+                <Route element={<ProtectedRoute allowedRoles={['officer', 'fra_officer', 'admin']} />}>
+                    <Route path="/officer" element={<ExecutiveShell portalTitle="Depot Operations" badgeText="FRA Officer" badgeColor="var(--agri-secondary)" />}>
+                        <Route index element={<FRADashboard />} />
+                    </Route>
+                </Route>
+
+                {/* Ministerial / Finance Module */}
+                <Route element={<ProtectedRoute allowedRoles={['ministry', 'finance', 'admin']} />}>
+                    <Route path="/ministry" element={<ExecutiveShell portalTitle="Executive Analytics" badgeText="Ministry Audit" badgeColor="#1e3a8a" />}>
+                        <Route index element={<MinisterialDashboard />} />
+                    </Route>
+                </Route>
+
+                {/* Fallback */}
+                <Route path="*" element={<NotFound />} />
+            </Routes>
+        </>
+    );
 }

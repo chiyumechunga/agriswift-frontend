@@ -1,13 +1,45 @@
-import { Navigate, Outlet } from 'react-router-dom';
+// src/components/ProtectedRoute.jsx
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export const ProtectedRoute = ({ allowedRoles }) => {
-    const { user } = useAuth();
+export function ProtectedRoute({ allowedRoles }) {
+    const { user, loading } = useAuth();
+    const location = useLocation();
 
-    if (!user) return <Navigate to="/" replace />;
-    if (allowedRoles && !allowedRoles.includes(user.role)) {
-        return <Navigate to={`/${user.role}`} replace />;
+    if (loading) {
+        return (
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <p style={{ fontWeight: '600', color: 'var(--agri-primary)' }}>Validating secure session credentials...</p>
+            </div>
+        );
+    }
+
+    if (!user) {
+        return <Navigate to="/login" state={{ from: location }} replace />;
+    }
+
+    const hasPermission = allowedRoles ? allowedRoles.includes(user.role) : true;
+
+    if (!hasPermission) {
+        // Redirect user to their default role dashboard if they lack permission for this route
+        const fallbackPath = user.role === 'farmer' ? '/farmer' : user.role === 'officer' ? '/officer' : '/ministry';
+        return <Navigate to={fallbackPath} replace />;
     }
 
     return <Outlet />;
-};
+}
+
+export function PublicOnlyRoute({ children }) {
+    const { user, loading } = useAuth();
+
+    if (loading) return null;
+
+    if (user) {
+        const dest = user.role === 'farmer' ? '/farmer' : user.role === 'officer' ? '/officer' : '/ministry';
+        return <Navigate to={dest} replace />;
+    }
+
+    return children;
+}
+
+export default ProtectedRoute;
