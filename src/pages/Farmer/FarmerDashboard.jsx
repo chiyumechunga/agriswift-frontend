@@ -1,198 +1,277 @@
 // src/pages/Farmer/FarmerDashboard.jsx
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import {
+  useDeliveryHistory,
+  useInitiateSimulatedPayment,
+  usePaymentAccounts,
+  usePaymentProgress,
+} from '../../hooks/useFarmerPortal';
+
+
+const money = new Intl.NumberFormat('en-ZM', {
+  style: 'currency',
+  currency: 'ZMW',
+  maximumFractionDigits: 2,
+});
+
+const whole = new Intl.NumberFormat('en-ZM', {
+  maximumFractionDigits: 0,
+});
+
+const kg = (value) => `${whole.format(Number(value ?? 0))} kg`;
+const tonnes = (value) => `${(Number(value ?? 0) / 1000).toLocaleString('en-ZM', { maximumFractionDigits: 2 })} MT`;
+const amount = (value) => money.format(Number(value ?? 0));
+const date = (value) => value ? new Date(`${value}T00:00:00`).toLocaleDateString('en-ZM', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+}) : '—';
+
+const userMessage = (error) => {
+  const body = error?.response?.data;
+  return body?.detail || body?.message || body?.title
+    || (error?.response ? `Request failed (${error.response.status}).` : 'Unable to reach AgriSwift.');
+};
+
+const paymentClass = (status) => {
+  if (status === 'SUCCEEDED' || status === 'ACKNOWLEDGED') return 'farmer-status success';
+  if (status === 'FAILED') return 'farmer-status failure';
+  return 'farmer-status pending';
+};
+
+function PaymentProgress({ paymentId, onClose }) {
+  const { data: payment, isLoading, error } = usePaymentProgress(paymentId);
+
+  if (isLoading) {
+    return <div className="farmer-inline-note">Starting payment simulation…</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="farmer-alert error">
+        Could not retrieve payment status: {userMessage(error)}
+        <button type="button" className="farmer-text-button" onClick={onClose}>Close</button>
+      </div>
+    );
+  }
+
+  return (
+    <section className="farmer-payment-progress" aria-live="polite">
+      <div className="farmer-progress-heading">
+        <div>
+          <span className="farmer-eyebrow">Simulation status</span>
+          <h3>{amount(payment.amount)} · {payment.status}</h3>
+        </div>
+        <button type="button" className="farmer-text-button" onClick={onClose}>Close</button>
+      </div>
+
+      <p className="farmer-muted">
+        This is a demonstration payment. No real money is sent to a bank or mobile-money wallet.
+      </p>
+
+      <ol className="farmer-timeline">
+        {(payment.events ?? []).map((event, index) => (
+          <li key={`${event.status}-${event.occurredAt}-${index}`}>
+            <span className="farmer-timeline-dot" />
+            <div>
+              <strong>{event.status.replaceAll('_', ' ')}</strong>
+              <small>{new Date(event.occurredAt).toLocaleString('en-ZM')}</small>
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      {payment.failureReason && (
+        <div className="farmer-alert error">{payment.failureReason}</div>
+      )}
+    </section>
+  );
+}
 
 export default function FarmerDashboard() {
-    const [payoutChannel, setPayoutChannel] = useState('mno'); // 'mno' | 'bank'
-    const [mnoProvider, setMnoProvider] = useState('MTN Mobile Money');
-    const [mnoNumber, setMnoNumber] = useState('0968123456');
-    const [bankName, setBankName] = useState('Zanaco');
-    const [accountNumber, setAccountNumber] = useState('1002938481023');
-    const [saveNotice, setSaveNotice] = useState(false);
+  const { user } = useAuth();
+  const { data: deliveryPage, isLoading: loadingDeliveries, error: deliveryError } =
+    useDeliveryHistory({ page: 0, size: 5 });
+  const { data: accounts = [], isLoading: loadingAccounts, error: accountError } =
+    usePaymentAccounts();
+  const initiate = useInitiateSimulatedPayment();
 
-    const recentDeliveries = [
-        { id: 'REC-2026-0912', date: '2026-10-04', depot: 'Monze Central Silos', crop: 'White Maize (Grade A)', weight: '3,200 kg', status: 'PAID', amount: 'ZMW 16,000' },
-        { id: 'REC-2026-0884', date: '2026-09-21', depot: 'Choma Regional Depot', crop: 'Soybeans', weight: '1,100 kg', status: 'PAID', amount: 'ZMW 8,800' },
-        { id: 'REC-2026-0810', date: '2026-09-10', depot: 'Monze Central Silos', crop: 'White Maize (Grade B)', weight: '2,400 kg', status: 'PROCESSING', amount: 'ZMW 11,520' },
-    ];
+  const [paymentId, setPaymentId] = useState(null);
+  const [actionError, setActionError] = useState('');
 
-    const handleSaveChannel = (e) => {
-        e.preventDefault();
-        setSaveNotice(true);
-        setTimeout(() => setSaveNotice(false), 3000);
+  const deliveries = deliveryPage?.content ?? [];
+  const preferredAccount = accounts.find((account) => account.preferred);
+
+  const totals = useMemo(() => {
+    const validated = deliveries.filter((delivery) => delivery.validationStatus === 'VALIDATED');
+    return {
+      validatedWeightKg: validated.reduce((sum, delivery) => sum + Number(delivery.weightKg ?? 0), 0),
+      availableAmount: validated.reduce((sum, delivery) => sum + Number(delivery.amount ?? 0), 0),
+      deliveryCount: validated.length,
     };
+  }, [deliveries]);
 
-    return (
-        <div style={{ display: 'grid', gap: '32px' }}>
-            {/* Account Overview Header */}
-            <div className="agri-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-                <div>
-                    <h2 className="agri-card-title">Welcome back, Chiyume Chunga</h2>
-                    <p style={{ color: 'var(--agri-text-muted)' }}>NRC: 293841/61/1 · ZIAMIS ID: ZM-890123 · Monze District</p>
-                </div>
+  const startPayment = (entitlementId) => {
+    setActionError('');
+    initiate.mutate(entitlementId, {
+      onSuccess: (payment) => setPaymentId(payment.paymentId),
+      onError: (error) => setActionError(userMessage(error)),
+    });
+  };
 
-                <div style={{ display: 'flex', gap: '16px' }}>
-                    <div style={{ background: 'var(--agri-primary-light)', padding: '12px 20px', borderRadius: 'var(--agri-radius-md)' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--agri-primary)', fontWeight: '800', letterSpacing: '0.05em' }}>TOTAL DELIVERED</span>
-                        <p style={{ fontSize: '20px', fontWeight: '800', color: 'var(--agri-primary)' }}>6.7 MT</p>
-                    </div>
-                    <div style={{ background: 'var(--agri-secondary-light)', padding: '12px 20px', borderRadius: 'var(--agri-radius-md)' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--agri-secondary)', fontWeight: '800', letterSpacing: '0.05em' }}>PAID OUT</span>
-                        <p style={{ fontSize: '20px', fontWeight: '800', color: 'var(--agri-secondary)' }}>ZMW 36,320</p>
-                    </div>
-                </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '32px' }}>
-                {/* Left: Deliveries */}
-                <div className="agri-card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                        <h3 className="agri-card-title" style={{ margin: 0 }}>Recent Crop Deliveries</h3>
-                        <Link to="/farmer/records" className="agri-btn agri-btn-outline" style={{ padding: '6px 12px', fontSize: '13px' }}>
-                            View Full History
-                        </Link>
-                    </div>
-
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
-                            <thead>
-                                <tr style={{ borderBottom: '2px solid var(--agri-border)', color: 'var(--agri-text-muted)' }}>
-                                    <th style={{ padding: '12px 8px' }}>Receipt</th>
-                                    <th style={{ padding: '12px 8px' }}>Date / Depot</th>
-                                    <th style={{ padding: '12px 8px' }}>Crop / Net Weight</th>
-                                    <th style={{ padding: '12px 8px' }}>Payout Status</th>
-                                    <th style={{ padding: '12px 8px' }}>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {recentDeliveries.map((item) => (
-                                    <tr key={item.id} style={{ borderBottom: '1px solid var(--agri-border)' }}>
-                                        <td style={{ padding: '14px 8px', fontWeight: '700' }}>{item.id}</td>
-                                        <td style={{ padding: '14px 8px' }}>
-                                            <div>{item.date}</div>
-                                            <small style={{ color: 'var(--agri-text-muted)' }}>{item.depot}</small>
-                                        </td>
-                                        <td style={{ padding: '14px 8px' }}>
-                                            <div>{item.crop}</div>
-                                            <small style={{ color: 'var(--agri-primary)', fontWeight: '700' }}>{item.weight}</small>
-                                        </td>
-                                        <td style={{ padding: '14px 8px' }}>
-                                            <span style={{
-                                                padding: '4px 10px',
-                                                borderRadius: 'var(--agri-radius-full)',
-                                                fontSize: '11px',
-                                                fontWeight: '800',
-                                                backgroundColor: item.status === 'PAID' ? '#dcfce7' : '#fef3c7',
-                                                color: item.status === 'PAID' ? '#166534' : '#b45309',
-                                            }}>
-                                                {item.status} · {item.amount}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '14px 8px' }}>
-                                            <Link to={`/farmer/receipt/${item.id}`} className="agri-btn agri-btn-primary" style={{ padding: '4px 10px', fontSize: '12px' }}>
-                                                Receipt &amp; QR
-                                            </Link>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                {/* Right: Payment Preference Channel */}
-                <div className="agri-card">
-                    <h3 className="agri-card-title">Payment Settlement Preference</h3>
-                    <p style={{ fontSize: '13px', color: 'var(--agri-text-muted)', marginBottom: '20px' }}>
-                        Select your preferred disbursement method for instant grain payouts.
-                    </p>
-
-                    <form onSubmit={handleSaveChannel} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        <div>
-                            <label style={{ fontSize: '13px', fontWeight: '700', display: 'block', marginBottom: '8px' }}>Disbursement Channel</label>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                <button
-                                    type="button"
-                                    className={`agri-btn ${payoutChannel === 'mno' ? 'agri-btn-primary' : 'agri-btn-outline'}`}
-                                    onClick={() => setPayoutChannel('mno')}
-                                    style={{ padding: '8px', fontSize: '13px' }}
-                                >
-                                    Mobile Money Wallet
-                                </button>
-                                <button
-                                    type="button"
-                                    className={`agri-btn ${payoutChannel === 'bank' ? 'agri-btn-primary' : 'agri-btn-outline'}`}
-                                    onClick={() => setPayoutChannel('bank')}
-                                    style={{ padding: '8px', fontSize: '13px' }}
-                                >
-                                    Bank Account
-                                </button>
-                            </div>
-                        </div>
-
-                        {payoutChannel === 'mno' ? (
-                            <>
-                                <div>
-                                    <label style={{ fontSize: '12px', fontWeight: '700' }}>MNO Mobile Wallet Provider</label>
-                                    <select
-                                        value={mnoProvider}
-                                        onChange={(e) => setMnoProvider(e.target.value)}
-                                        style={{ width: '100%', padding: '10px', borderRadius: 'var(--agri-radius-sm)', border: '1px solid var(--agri-border)', marginTop: '4px' }}
-                                    >
-                                        <option value="MTN Mobile Money">MTN Mobile Money</option>
-                                        <option value="Airtel Money">Airtel Money</option>
-                                        <option value="Zamtel Kwacha">Zamtel Kwacha</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style={{ fontSize: '12px', fontWeight: '700' }}>Mobile Number (NRC Linked)</label>
-                                    <input
-                                        type="text"
-                                        value={mnoNumber}
-                                        onChange={(e) => setMnoNumber(e.target.value)}
-                                        style={{ width: '100%', padding: '10px', borderRadius: 'var(--agri-radius-sm)', border: '1px solid var(--agri-border)', marginTop: '4px' }}
-                                    />
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div>
-                                    <label style={{ fontSize: '12px', fontWeight: '700' }}>Commercial Bank</label>
-                                    <select
-                                        value={bankName}
-                                        onChange={(e) => setBankName(e.target.value)}
-                                        style={{ width: '100%', padding: '10px', borderRadius: 'var(--agri-radius-sm)', border: '1px solid var(--agri-border)', marginTop: '4px' }}
-                                    >
-                                        <option value="Zanaco">Zanaco Commercial Bank</option>
-                                        <option value="Atlas Mara">Atlas Mara Zambia</option>
-                                        <option value="Absa">Absa Bank Zambia</option>
-                                        <option value="Indo-Zambia">Indo-Zambia Bank</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style={{ fontSize: '12px', fontWeight: '700' }}>Account Number</label>
-                                    <input
-                                        type="text"
-                                        value={accountNumber}
-                                        onChange={(e) => setAccountNumber(e.target.value)}
-                                        style={{ width: '100%', padding: '10px', borderRadius: 'var(--agri-radius-sm)', border: '1px solid var(--agri-border)', marginTop: '4px' }}
-                                    />
-                                </div>
-                            </>
-                        )}
-
-                        <button type="submit" className="agri-btn agri-btn-secondary" style={{ marginTop: '8px' }}>
-                            Save Payment Preference
-                        </button>
-
-                        {saveNotice && (
-                            <p style={{ color: 'var(--agri-primary)', fontSize: '13px', textAlign: 'center', fontWeight: '700' }}>
-                                Saved! Active channel updated on AgriSwift settlement engine.
-                            </p>
-                        )}
-                    </form>
-                </div>
-            </div>
+  return (
+    <div className="farmer-page">
+      <header className="farmer-page-head">
+        <div>
+          <span className="farmer-eyebrow">Farmer workspace</span>
+          <h1>Welcome, {user?.name || 'Farmer'}</h1>
+          <p>Track deliveries, receipts and simulated payment processing in one place.</p>
         </div>
-    );
+        <div className="farmer-mode-badge">
+          <span className="material-symbols-outlined">science</span>
+          Payment simulation
+        </div>
+      </header>
+
+      {!loadingAccounts && !preferredAccount && (
+        <section className="farmer-alert warning">
+          <div>
+            <strong>Complete your payout setup</strong>
+            <p>Add and select a preferred mobile-money wallet or bank account before starting a payment simulation.</p>
+          </div>
+          <Link className="farmer-button secondary" to="/farmer/registration">
+            Complete setup
+          </Link>
+        </section>
+      )}
+
+      {accountError && (
+        <div className="farmer-alert error">
+          Could not load payout-account setup: {userMessage(accountError)}
+        </div>
+      )}
+
+      <section className="farmer-stats" aria-label="Delivery summary">
+        <article className="farmer-stat-card">
+          <span>Total validated intake</span>
+          <strong>{tonnes(totals.validatedWeightKg)}</strong>
+          <small>{whole.format(totals.deliveryCount)} recent validated deliveries</small>
+        </article>
+        <article className="farmer-stat-card">
+          <span>Available for simulation</span>
+          <strong>{amount(totals.availableAmount)}</strong>
+          <small>Calculated from loaded validated deliveries</small>
+        </article>
+        <article className="farmer-stat-card">
+          <span>Payout account</span>
+          <strong>{preferredAccount ? 'Configured' : 'Action needed'}</strong>
+          <small>
+            {preferredAccount
+              ? `${preferredAccount.providerName} · ${preferredAccount.maskedAccountNumber}`
+              : 'No preferred account selected'}
+          </small>
+        </article>
+      </section>
+
+      {paymentId && (
+        <PaymentProgress paymentId={paymentId} onClose={() => setPaymentId(null)} />
+      )}
+
+      <section className="farmer-panel">
+        <div className="farmer-panel-head">
+          <div>
+            <span className="farmer-eyebrow">Deliveries</span>
+            <h2>Recent crop deliveries</h2>
+          </div>
+          <Link to="/farmer/records" className="farmer-button ghost">
+            View all history
+          </Link>
+        </div>
+
+        {actionError && <div className="farmer-alert error">{actionError}</div>}
+
+        {loadingDeliveries && <p className="farmer-muted">Loading deliveries from AgriSwift…</p>}
+
+        {deliveryError && (
+          <div className="farmer-alert error">
+            Could not load deliveries: {userMessage(deliveryError)}
+          </div>
+        )}
+
+        {!loadingDeliveries && !deliveryError && deliveries.length === 0 && (
+          <div className="farmer-empty-state">
+            <span className="material-symbols-outlined">agriculture</span>
+            <h3>No deliveries yet</h3>
+            <p>Your recorded crop deliveries will appear here after an FRA officer completes intake.</p>
+          </div>
+        )}
+
+        {!loadingDeliveries && deliveries.length > 0 && (
+          <div className="farmer-table-wrap">
+            <table className="farmer-table">
+              <thead>
+                <tr>
+                  <th>Delivery</th>
+                  <th>Crop and weight</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {deliveries.map((delivery) => {
+                  const payable = delivery.validationStatus === 'VALIDATED'
+                    && Number(delivery.amount ?? 0) > 0;
+
+                  return (
+                    <tr key={delivery.entitlementId}>
+                      <td>
+                        <strong>{date(delivery.deliveryDate)}</strong>
+                        <small>{delivery.depotName}</small>
+                        {delivery.receiptSerialNumber && (
+                          <small className="farmer-receipt">{delivery.receiptSerialNumber}</small>
+                        )}
+                      </td>
+                      <td>
+                        <strong>{delivery.cropName}</strong>
+                        <small>{kg(delivery.weightKg)}</small>
+                      </td>
+                      <td><strong>{amount(delivery.amount)}</strong></td>
+                      <td>
+                        <span className={paymentClass(delivery.validationStatus === 'VALIDATED' ? 'SUCCEEDED' : 'PENDING')}>
+                          {delivery.validationStatus.replaceAll('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="farmer-actions">
+                        {delivery.receiptId && (
+                          <Link
+                            className="farmer-text-button"
+                            to={`/farmer/receipt/${delivery.receiptId}`}
+                          >
+                            Receipt
+                          </Link>
+                        )}
+                        {payable && (
+                          <button
+                            type="button"
+                            className="farmer-text-button primary"
+                            disabled={!preferredAccount || initiate.isPending}
+                            onClick={() => startPayment(delivery.entitlementId)}
+                          >
+                            {initiate.isPending ? 'Starting…' : 'Simulate payment'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
 }

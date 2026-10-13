@@ -1,55 +1,88 @@
 // src/api/client.js
 import axios from 'axios';
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api/v1';
+
 export const tokens = {
   access: null,
   refresh: null,
-  type: 'farmer',
+  type: null,
   onAuthLost: () => {},
   onRotate: () => {},
 };
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api/v1',
-  headers: { 'Content-Type': 'application/json' },
+  baseURL: BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
 apiClient.interceptors.request.use((config) => {
-  if (tokens.access) config.headers.Authorization = `Bearer ${tokens.access}`;
+  if (tokens.access) {
+    config.headers.Authorization = `Bearer ${tokens.access}`;
+  }
   return config;
 });
 
-let refreshing = null;
+let refreshInFlight = null;
 
-async function doRefresh() {
-  const { data } = await axios.post(
-    `${apiClient.defaults.baseURL}/${tokens.type === 'farmer' ? 'auth/farmer/refresh' : 'auth/refresh'}`,
+const refreshPath = () =>
+  tokens.type === 'farmer'
+    ? '/auth/farmer/refresh'
+    : '/auth/refresh';
+
+const refreshSession = async () => {
+  if (!tokens.refresh) {
+    throw new Error('No refresh token is available.');
+  }
+
+  const response = await axios.post(
+    `${BASE_URL}${refreshPath()}`,
     { refreshToken: tokens.refresh },
     { headers: { 'Content-Type': 'application/json' } },
   );
-  tokens.access = data.accessToken;
-  tokens.refresh = data.refreshToken;
+
+  tokens.access = response.data.accessToken;
+  tokens.refresh = response.data.refreshToken;
   tokens.onRotate();
-  return data.accessToken;
-}
+
+  return tokens.access;
+};
 
 apiClient.interceptors.response.use(
-  (res) => res,
+  (response) => response,
   async (error) => {
-    const original = error.config;
-    if (error.response?.status === 401 && original && !original._retry && tokens.refresh) {
-      original._retry = true;
-      try {
-        refreshing ??= doRefresh().finally(() => { refreshing = null; });
-        const access = await refreshing;
-        original.headers.Authorization = `Bearer ${access}`;
-        return apiClient(original);
-      } catch {
-        tokens.onAuthLost();
-        return Promise.reject(error);
-      }
+    const request = error.config;
+
+    const isUnauthorized = error.response?.status === 401;
+    const isRefreshRequest = request?.url?.includes('/auth/refresh')
+      || request?.url?.includes('/auth/farmer/refresh');
+
+    if (!isUnauthorized || !request || request._retry || isRefreshRequest) {
+      return Promise.reject(error);
     }
-    if (error.response?.status === 401 && !tokens.refresh) tokens.onAuthLost();
-    return Promise.reject(error);
+
+    request._retry = true;
+
+    try {
+      refreshInFlight ??= refreshSession().finally(() => {
+        refreshInFlight = null;
+      });
+
+      const nextAccessToken = await refreshInFlight;
+      request.headers.Authorization = `Bearer ${nextAccessToken}`;
+
+      return apiClient(request);
+    } catch (refreshError) {
+      Object.assign(tokens, {
+        access: null,
+        refresh: null,
+        type: null,
+      });
+      tokens.onAuthLost();
+
+      return Promise.reject(refreshError);
+    }
   },
 );
